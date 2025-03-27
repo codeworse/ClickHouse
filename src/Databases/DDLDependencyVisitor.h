@@ -18,4 +18,6 @@ TableNamesSet getDependenciesFromCreateQuery(const ContextPtr & global_context, 
 /// Returns a list of all tables explicitly referenced in the select query specified as a dictionary source.
 TableNamesSet getDependenciesFromDictionaryNestedSelectQuery(const ContextPtr & global_context, const QualifiedTableName & table_name, const ASTPtr & ast, const String & select_query, const String & current_database, bool can_throw = false);
 
+TableNamesSet getDependenciesFromAlterQuery(const ContextPtr & global_context, const QualifiedTableName & table_name, const ASTPtr & ast, const String & current_database, bool can_throw = false);
+
 }

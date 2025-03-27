@@ -17,6 +17,7 @@
 #include <Parsers/parseQuery.h>
 #include <Common/KnownObjectNames.h>
 #include <Common/quoteString.h>
+#include "Parsers/ASTAlterQuery.h"
 #include <Core/Settings.h>
 #include <Poco/String.h>
 
@@ -72,6 +73,9 @@ namespace
                     visitTableEngine(*function);
                 else
                     visitFunction(*function);
+            } else if (const auto * alter = ast->as<ASTAlterQuery>())
+            {
+                visitAlterQuery(*alter);
             }
         }
 
@@ -315,6 +319,16 @@ namespace
             }
         }
 
+        void visitAlterQuery(const ASTAlterQuery& alter) {
+            for (const ASTPtr& command : alter.command_list->children) {
+                const ASTTableExpression* expr = command->as<ASTTableExpression>();
+                if (!expr) {
+                    continue;
+                }
+                visitTableExpression(*expr);
+            }
+        }
+
         /// Gets an argument as a string, evaluates constants if necessary.
         std::optional<String> tryGetStringFromArgument(const ASTFunction & function, size_t arg_idx, bool evaluate = true) const
         {
@@ -506,6 +520,14 @@ TableNamesSet getDependenciesFromDictionaryNestedSelectQuery(const ContextPtr & 
 {
     DDLDependencyVisitor::Data data{global_context, table_name, ast, current_database, can_throw};
     tryVisitNestedSelect(select_query, data);
+    return std::move(data).getDependencies();
+}
+
+TableNamesSet getDependenciesFromAlterQuery(const ContextPtr & global_global_context, const QualifiedTableName & table_name, const ASTPtr & ast, const String & current_database, bool can_throw)
+{
+    DDLDependencyVisitor::Data data{global_global_context, table_name, ast, current_database, can_throw};
+    DDLDependencyVisitor::Visitor visitor{data};
+    visitor.visit(ast);
     return std::move(data).getDependencies();
 }
 

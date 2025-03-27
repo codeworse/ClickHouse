@@ -509,4 +509,12 @@ TableNamesSet getDependenciesFromDictionaryNestedSelectQuery(const ContextPtr & 
     return std::move(data).getDependencies();
 }
 
+TableNamesSet getDependenciesFromAlterQuery(const ContextPtr & global_global_context, const QualifiedTableName & table_name, const ASTPtr & ast, const String & current_database, bool can_throw)
+{
+    DDLDependencyVisitor::Data data{global_global_context, table_name, ast, current_database, can_throw};
+    DDLDependencyVisitor::Visitor visitor{data};
+    visitor.visit(ast);
+    return std::move(data).getDependencies();
+}
+
 }

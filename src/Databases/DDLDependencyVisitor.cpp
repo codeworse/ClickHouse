@@ -17,6 +17,7 @@
 #include <Parsers/parseQuery.h>
 #include <Common/KnownObjectNames.h>
 #include <Common/quoteString.h>
+#include "Parsers/ASTAlterQuery.h"
 #include <Core/Settings.h>
 #include <Poco/String.h>
 
@@ -72,6 +73,9 @@ namespace
                     visitTableEngine(*function);
                 else
                     visitFunction(*function);
+            } else if (const auto * alter = ast->as<ASTAlterQuery>())
+            {
+                visitAlterQuery(*alter);
             }
         }
 
@@ -312,6 +316,16 @@ namespace
             {
                 /// `table function` will be executed remotely, so we won't check it or its arguments for dependencies.
                 skip_asts.emplace(table_function);
+            }
+        }
+
+        void visitAlterQuery(const ASTAlterQuery& alter) {
+            for (const ASTPtr& command : alter.command_list->children) {
+                const ASTTableExpression* expr = command->as<ASTTableExpression>();
+                if (!expr) {
+                    continue;
+                }
+                visitTableExpression(*expr);
             }
         }
 

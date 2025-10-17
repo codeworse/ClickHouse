@@ -31,7 +31,6 @@ class RemoteQueryExecutorReadContext;
 
 class ParallelReplicasReadingCoordinator;
 
-/// This is the same type as StorageS3Source::IteratorWrapper
 using TaskIterator = std::function<ClusterFunctionReadTaskResponsePtr(size_t)>;
 
 /// This class allows one to launch queries on remote replicas of one shard and get results
@@ -80,18 +79,6 @@ public:
         const Tables & external_tables_ = Tables(),
         QueryProcessingStage::Enum stage_ = QueryProcessingStage::Complete,
 
-        std::optional<Extension> extension_ = std::nullopt);
-
-    /// Takes already set connection.
-    RemoteQueryExecutor(
-        std::shared_ptr<Connection> connection,
-        const String & query_,
-        SharedHeader header_,
-        ContextPtr context_,
-        ThrottlerPtr throttler_ = nullptr,
-        const Scalars & scalars_ = Scalars(),
-        const Tables & external_tables_ = Tables(),
-        QueryProcessingStage::Enum stage_ = QueryProcessingStage::Complete,
         std::optional<Extension> extension_ = std::nullopt);
 
     /// Accepts several connections already taken from pool.

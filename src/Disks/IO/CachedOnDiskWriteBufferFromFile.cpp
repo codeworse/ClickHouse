@@ -1,6 +1,7 @@
 #include <Disks/IO/CachedOnDiskWriteBufferFromFile.h>
 
 #include <Common/logger_useful.h>
+#include <Common/FailPoint.h>
 #include <Interpreters/Cache/FileCache.h>
 #include <Interpreters/Cache/FileSegment.h>
 #include <Interpreters/FilesystemCacheLog.h>
@@ -17,6 +18,11 @@ namespace ProfileEvents
 
 namespace DB
 {
+
+namespace FailPoints
+{
+    extern const char cache_filesystem_failure[];
+}
 
 namespace ErrorCodes
 {
@@ -231,7 +237,7 @@ void FileSegmentRangeWriter::completeFileSegment()
     if (file_segment.isDetached() || file_segment.isCompleted())
         return;
 
-    file_segment.complete(false);
+    file_segments->completeAndPopFront(/*allow_background_download=*/false, /*force_shrink_to_downloaded_size=*/true);
     appendFilesystemCacheLog(file_segment);
 }
 
@@ -245,7 +251,7 @@ void FileSegmentRangeWriter::jumpToPosition(size_t position)
         if (position < current_write_offset)
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot jump backwards: {} < {}", position, current_write_offset);
 
-        file_segment.complete(false);
+        file_segments->completeAndPopFront(/*allow_background_download=*/false, /*force_shrink_to_downloaded_size=*/true);
         file_segments.reset();
     }
     expected_write_offset = position;
@@ -322,6 +328,10 @@ void CachedOnDiskWriteBufferFromFile::cacheData(char * data, size_t size, bool t
 
     try
     {
+        fiu_do_on(FailPoints::cache_filesystem_failure,
+        {
+            throw std::filesystem::filesystem_error("Failpoint while caching data", std::error_code());
+        });
         if (!cache_writer->write(data, size, current_download_offset, file_segment_kind))
         {
             LOG_INFO(log, "Write-through cache is stopped as cache limit is reached and nothing can be evicted");
@@ -342,6 +352,10 @@ void CachedOnDiskWriteBufferFromFile::cacheData(char * data, size_t size, bool t
 
         tryLogCurrentException(__PRETTY_FUNCTION__);
         return;
+    }
+    catch (const std::filesystem::filesystem_error & e)
+    {
+        LOG_ERROR(log, "Insert into cache is skipped due to cache filesystem error: {}", e.what());
     }
     catch (...)
     {

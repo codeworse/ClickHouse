@@ -51,6 +51,7 @@ namespace QueryPlanSerializationSetting
     extern const QueryPlanSerializationSettingsUInt64 min_free_disk_space_for_temporary_data;
     extern const QueryPlanSerializationSettingsFloat min_hit_rate_to_use_consecutive_keys_optimization;
     extern const QueryPlanSerializationSettingsBool optimize_group_by_constant_keys;
+    extern const QueryPlanSerializationSettingsBool enable_producing_buckets_out_of_order_in_aggregation;
 }
 
 namespace ErrorCodes
@@ -729,6 +730,8 @@ void AggregatingStep::serializeSettings(QueryPlanSerializationSettings & setting
     settings[QueryPlanSerializationSetting::collect_hash_table_stats_during_aggregation] = params.stats_collecting_params.isCollectionAndUseEnabled();
     settings[QueryPlanSerializationSetting::max_entries_for_hash_table_stats] = params.stats_collecting_params.max_entries_for_hash_table_stats;
     settings[QueryPlanSerializationSetting::max_size_to_preallocate_for_aggregation] = params.stats_collecting_params.max_size_to_preallocate;
+
+    settings[QueryPlanSerializationSetting::enable_producing_buckets_out_of_order_in_aggregation] = params.enable_producing_buckets_out_of_order_in_aggregation;
 }
 
 void AggregatingStep::serialize(Serialization & ctx) const
@@ -846,8 +849,7 @@ std::unique_ptr<IQueryPlanStep> AggregatingStep::deserialize(Deserialization & c
         ctx.settings[QueryPlanSerializationSetting::max_entries_for_hash_table_stats],
         ctx.settings[QueryPlanSerializationSetting::max_size_to_preallocate_for_aggregation]);
 
-    Aggregator::Params params
-    {
+    Aggregator::Params params{
         keys,
         aggregates,
         overflow_row,
@@ -867,8 +869,8 @@ std::unique_ptr<IQueryPlanStep> AggregatingStep::deserialize(Deserialization & c
         /* only_merge */ false,
         ctx.settings[QueryPlanSerializationSetting::optimize_group_by_constant_keys],
         ctx.settings[QueryPlanSerializationSetting::min_hit_rate_to_use_consecutive_keys_optimization],
-        stats_collecting_params
-    };
+        stats_collecting_params,
+        ctx.settings[QueryPlanSerializationSetting::enable_producing_buckets_out_of_order_in_aggregation]};
 
     SortDescription sort_description_for_merging;
 
@@ -890,6 +892,38 @@ std::unique_ptr<IQueryPlanStep> AggregatingStep::deserialize(Deserialization & c
         false);
 
     return aggregating_step;
+}
+
+QueryPlanStepPtr AggregatingStep::clone() const
+{
+    return std::make_unique<AggregatingStep>(
+        input_headers.front(),
+        params,
+        grouping_sets_params,
+        final,
+        max_block_size,
+        aggregation_in_order_max_block_bytes,
+        merge_threads,
+        temporary_data_merge_threads,
+        storage_has_evenly_distributed_read,
+        group_by_use_nulls,
+        sort_description_for_merging,
+        group_by_sort_description,
+        should_produce_results_in_order_of_bucket_number,
+        memory_bound_merging_of_aggregation_results_enabled,
+        explicit_sorting_required_for_aggregation_in_order
+    );
+}
+
+void AggregatingStep::setFinal(bool new_value)
+{
+    if (new_value == final)
+        return;
+
+    final = new_value;
+
+    /// Output header is different for partial and final result, so it needs to be updated when we switch between them.
+    updateOutputHeader();
 }
 
 void registerAggregatingStep(QueryPlanStepRegistry & registry)

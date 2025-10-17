@@ -48,7 +48,7 @@ public:
 protected:
     /// Remove all columns marked expired in data_part. Also, clears checksums
     /// and columns array. Return set of removed files names.
-    NameSet removeExpiredColumnsFromPart(
+    NameSet removeEmptyColumnsFromPart(
         const MergeTreeDataPartPtr & data_part,
         NamesAndTypesList & columns,
         SerializationInfoByName & serialization_infos,
@@ -63,7 +63,8 @@ protected:
     MergeTreeDataPartWriterPtr writer;
 
     bool reset_columns = false;
-    SerializationInfoByName new_serialization_infos;
+    SerializationInfo::Settings info_settings;
+    SerializationInfoByName new_serialization_infos{{}};
 };
 
 using IMergedBlockOutputStreamPtr = std::shared_ptr<IMergedBlockOutputStream>;
